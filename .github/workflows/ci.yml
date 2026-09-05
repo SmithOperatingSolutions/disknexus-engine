@@ -1,0 +1,106 @@
+# disknexus-engine CI.
+#
+# INERT WHILE THE ENGINE LIVES IN-TREE: GitHub reads workflows from the
+# repository root, and this file sits under engine/. It is the workflow the
+# split repository runs from day one — drafted from the engine-touching
+# steps of the product's CI so nothing is invented at extraction time.
+#
+# Jobs mirror what the product runs on the engine today: gofmt/vet/build on
+# Linux, unit on all three OSes (the engine is the platform-sensitive part),
+# -race on the index and store, the slow scale guards on the pipeline, the
+# filesystem-image tests, and the elevated-Windows VSS snapshot test.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  static:
+    name: gofmt · vet · cross-compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: gofmt
+        run: |
+          out=$(gofmt -l .)
+          if [ -n "$out" ]; then echo "not gofmt-clean:"; echo "$out"; exit 1; fi
+      - run: go vet ./...
+      - run: GOOS=windows GOARCH=amd64 go vet ./...
+      - run: GOOS=darwin  GOARCH=arm64 go vet ./...
+      - run: go vet -tags slow ./...
+      - run: go vet -tags filesystem ./volumefs/
+
+  unit:
+    name: Unit / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+
+  race:
+    name: Race
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race -count=1 ./core/index/... ./core/store/... ./core/pipeline/...
+
+  slow:
+    name: Scale guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -tags slow -timeout 600s ./core/pipeline/...
+
+  filesystem:
+    name: Filesystem images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -tags filesystem -timeout 120s ./volumefs/...
+
+  vss-windows:
+    # GitHub-hosted Windows runners are elevated, which a real shadow copy
+    # needs. This is the test no other OS can run.
+    name: VSS snapshot / Windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./vss/ -run TestCreateSnapshotSet2Volumes -count=1 -v

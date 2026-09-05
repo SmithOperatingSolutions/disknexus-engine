@@ -1,0 +1,84 @@
+//go:build filesystem
+
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Smith Operating Solutions
+
+package volumefs
+
+import (
+	"context"
+	"os"
+	"testing"
+)
+
+func TestScanNTFS(t *testing.T) {
+	f, err := os.Open(testdataPath(t, "ntfs.img"))
+	if err != nil {
+		t.Fatalf("open ntfs.img: %v", err)
+	}
+	defer f.Close()
+
+	entries, err := scanNTFS(f, 0)
+	if err != nil {
+		t.Fatalf("scanNTFS: %v", err)
+	}
+
+	hello := findFile(entries, "hello.txt")
+	if hello == nil {
+		t.Fatal("hello.txt not found in scan results")
+	}
+	if hello.Size != 17 {
+		t.Errorf("hello.txt size: got %d, want 17", hello.Size)
+	}
+	// hello.txt is 18 bytes — resident in MFT, so no extents expected.
+
+	dir1 := findFile(entries, "dir1")
+	if dir1 == nil {
+		t.Fatal("dir1 not found in scan results")
+	}
+	if !dir1.IsDir {
+		t.Error("dir1.IsDir should be true")
+	}
+
+	data := findFile(entries, "dir1/data.bin")
+	if data == nil {
+		t.Fatal("dir1/data.bin not found in scan results")
+	}
+	if data.Size != 4096 {
+		t.Errorf("dir1/data.bin size: got %d, want 4096", data.Size)
+	}
+	if len(data.VolumeExtents) == 0 {
+		t.Error("dir1/data.bin should have at least one VolumeExtent (non-resident)")
+	}
+}
+
+func TestScanVolumeNTFS(t *testing.T) {
+	imgPath := testdataPath(t, "ntfs.img")
+	result, err := ScanVolume(context.Background(), imgPath, 0, nil, "")
+	if err != nil {
+		t.Fatalf("ScanVolume: %v", err)
+	}
+
+	if result.Filesystem != "ntfs" {
+		t.Errorf("Filesystem: got %q, want ntfs", result.Filesystem)
+	}
+
+	hello := findFile(result.Files, "hello.txt")
+	if hello == nil {
+		t.Fatal("hello.txt not found")
+	}
+	if hello.Size != 17 {
+		t.Errorf("hello.txt size: got %d, want 17", hello.Size)
+	}
+
+	data := findFile(result.Files, "dir1/data.bin")
+	if data == nil {
+		t.Fatal("dir1/data.bin not found")
+	}
+	if data.Size != 4096 {
+		t.Errorf("dir1/data.bin size: got %d, want 4096", data.Size)
+	}
+	if len(data.VolumeExtents) == 0 {
+		t.Error("dir1/data.bin should have at least one VolumeExtent")
+	}
+}
