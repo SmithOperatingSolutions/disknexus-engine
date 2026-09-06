@@ -25,11 +25,11 @@ no account — and the suite that demonstrates that ships here.
 | `core/prune`, `core/forget`, `core/retention` | What to keep, what to delete, and reclaiming packs safely |
 | `core/crypto` | AES-256-GCM at rest, keys wrapped by passphrase (Argon2) or by a managed keypair |
 | `core/checkpoint`, `core/resume` | The resume protocol: sealed packs, sidecar entries, a checkpoint record |
-| `core/disklayout` | GPT/MBR partition tables |
-| `volume`, `volumefs` | Reading a block device or image; NTFS/ext4/exFAT/FAT32 catalogs and volatile-region exclusion |
+| `core/disklayout` | GPT/MBR partition tables, relocation onto a larger disk, and `PlanFit`: fitting a captured layout onto a drive of another size (grow the last data partition, move a trailing Recovery partition, shrink what can shrink, refuse a sector-size mismatch) |
+| `volume`, `volumefs` | Reading a block device or image; NTFS/ext4/exFAT/FAT32 catalogs and volatile-region exclusion; a filesystem's minimum size (`MinimumSize`) and identity (`Identity`: serial/UUID and label, the same across letters and machines); the seam that shrinks a filesystem with the platform tools (`ExternalShrinker`) |
 | `vss` | Windows Volume Shadow Copy snapshots (via [go-vss](https://github.com/SmithOperatingSolutions/go-vss)) |
 | `filemode` | File-tree capture |
-| `bmr` | Bare-metal restore: putting a disk back onto hardware |
+| `bmr` | Bare-metal restore: putting a disk back onto hardware, same-size or into a fit plan (`RestoreDiskFit`, with shrunk members staged by the caller); `CloneDisk` drive-to-drive with per-partition read-back; `CheckBootStructures`, what a boot needs on the written target |
 | `diskplan`, `restoreplan` | Planning a multi-partition capture; planning how a restore fetches its packs |
 | `exportimport` | Exporting a backup set as a portable archive, and importing one |
 
@@ -75,8 +75,8 @@ load-bearing guard is mutation-proven. `CONTRIBUTING.md` has the rest.
 ## Versioning
 
 Pre-1.0. The API is stable in practice but not yet promised: minor versions
-may change signatures, and the changelog says so when they do. The on-disk
-formats are the thing that does not change under you.
+may change signatures, and [CHANGELOG.md](CHANGELOG.md) says so when they
+do. The on-disk formats are the thing that does not change under you.
 
 Comments in the source cite issue numbers (`#NNN`). Those refer to the
 originating private tracker; they are kept because they name the incident or
