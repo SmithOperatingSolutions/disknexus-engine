@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -85,10 +86,24 @@ func TestExternalShrinkerInvokesTheRightToolWithTheRightArguments(t *testing.T) 
 func TestExternalShrinkerExecsToolsOnPathAndNamesMissingOnes(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "argv.log")
-	for _, tool := range []string{"ntfsresize", "e2fsck", "resize2fs"} {
-		script := "#!/bin/sh\necho \"$0 $@\" >> " + log + "\n"
-		if err := os.WriteFile(filepath.Join(dir, tool), []byte(script), 0o755); err != nil {
+	// The fake tool appends "<name> <argv>" to the log: a shell script on
+	// POSIX, a .bat on Windows (LookPath there resolves only PATHEXT names).
+	fakeTool := func(tool string) string {
+		path := filepath.Join(dir, tool)
+		script := "#!/bin/sh\necho \"" + tool + " $@\" >> \"" + log + "\"\n"
+		if runtime.GOOS == "windows" {
+			path += ".bat"
+			script = "@echo " + tool + " %*>>\"" + log + "\"\r\n"
+		}
+		if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 			t.Fatal(err)
+		}
+		return path
+	}
+	var ntfsresizePath string
+	for _, tool := range []string{"ntfsresize", "e2fsck", "resize2fs"} {
+		if p := fakeTool(tool); tool == "ntfsresize" {
+			ntfsresizePath = p
 		}
 	}
 	t.Setenv("PATH", dir)
@@ -101,11 +116,14 @@ func TestExternalShrinkerExecsToolsOnPathAndNamesMissingOnes(t *testing.T) {
 	}
 	got, _ := os.ReadFile(log)
 	lines := strings.Split(strings.TrimSpace(string(got)), "\n")
-	if len(lines) != 2 || !strings.HasSuffix(lines[0], "e2fsck -f -y /dev/fake1") || !strings.HasSuffix(lines[1], "resize2fs /dev/fake1 2048K") {
+	for i := range lines {
+		lines[i] = strings.TrimSpace(lines[i])
+	}
+	if len(lines) != 2 || lines[0] != "e2fsck -f -y /dev/fake1" || lines[1] != "resize2fs /dev/fake1 2048K" {
 		t.Fatalf("exec'd argv:\n%s", got)
 	}
 	// Positive control done; now the missing tool.
-	if err := os.Remove(filepath.Join(dir, "ntfsresize")); err != nil {
+	if err := os.Remove(ntfsresizePath); err != nil {
 		t.Fatal(err)
 	}
 	err := s.Available("ntfs")
