@@ -299,6 +299,10 @@ type CloneResult struct {
 	Partitions int
 	Bytes      int64
 	Digests    map[int]string // partition index → SHA-256 of the bytes written
+	// ReadBack is how many partitions were read back from the target and
+	// compared to what was written (every one when ReadAt is set, none
+	// otherwise). A clone that says fewer than Partitions was not verified.
+	ReadBack int
 }
 
 // CloneDisk copies a partitioned disk to another, partition by partition,
@@ -381,6 +385,7 @@ func CloneDisk(ctx context.Context, opts CloneDiskOptions) (*CloneResult, error)
 			if back != sum {
 				return nil, fmt.Errorf("partition %d: the target reads back differently from what was written — the clone is not trustworthy; keep the source drive", p.Index)
 			}
+			res.ReadBack++
 		}
 		res.Digests[p.Index] = hex.EncodeToString(sum[:])
 		res.Partitions++
