@@ -295,6 +295,16 @@ func TestCloneDiskIsByteExactAndDistrustsABadTarget(t *testing.T) {
 	if !bytes.Equal(got, img) {
 		t.Fatal("a same-size clone is not byte-identical to the source")
 	}
+	if res.ReadBack != 4 {
+		t.Fatalf("read back %d partitions of %d — a clone with ReadAt set must compare every one", res.ReadBack, res.Partitions)
+	}
+	// Without ReadAt nothing is compared, and the result says so.
+	fBlind, _ := targetFile(t, int64(len(img)))
+	blind, err := CloneDisk(context.Background(), CloneDiskOptions{Source: src, SourceSize: int64(len(img)),
+		Target: &imageTarget{f: fBlind}, TargetSize: int64(len(img))})
+	if err != nil || blind.ReadBack != 0 || blind.Partitions != 4 {
+		t.Fatalf("a clone without ReadAt: err=%v read back %d of %d, want 0 — the count must not claim a verification that did not happen", err, blind.ReadBack, blind.Partitions)
+	}
 	if res.Partitions != 4 || len(res.Digests) != 4 {
 		t.Fatalf("result = %+v", res)
 	}
