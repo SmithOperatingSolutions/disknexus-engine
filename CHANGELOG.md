@@ -5,6 +5,7 @@ never change incompatibly.
 
 ## v0.2.6 (unreleased)
 - `crypto.WrapSecretAsymmetric` / `crypto.UnwrapSecretAsymmetric`: X25519 ECIES for a secret of any length (HKDF info `disknexus-secret-wrap-v1`, a domain distinct from master-key wrapping); the layout a browser reproduces with WebCrypto. `crypto.SecretWrapOverhead`.
+- `crypto.KeyFile.KeyID` (`key_id`, optional; absent in earlier files, readers treat absence as unknown): a domain-separated hash naming the master key without carrying it. `(*MasterKey).ID()`, `crypto.RewrapKeyFile(mk, passphrase)` (the rotation primitive: same key, fresh salt and nonce), `(*KeyFile).SameKey(other)`.
 
 ## v0.2.5
 - deps: `github.com/ulikunitz/xz` v0.5.15 (indirect, via go-diskfs).

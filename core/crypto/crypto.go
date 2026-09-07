@@ -218,6 +218,9 @@ type KeyFile struct {
 	Salt       []byte       `json:"salt"`
 	Nonce      []byte       `json:"nonce"`
 	WrappedKey []byte       `json:"wrapped_key"`
+	// KeyID names the master key without carrying it (see keyid.go). Absent
+	// in key files written before v0.2.6; readers treat absence as unknown.
+	KeyID []byte `json:"key_id,omitempty"`
 }
 
 // GenerateKeyFile creates a new key file from a passphrase.
@@ -252,6 +255,7 @@ func GenerateKeyFile(passphrase string) (*KeyFile, *MasterKey, error) {
 		Salt:       salt,
 		Nonce:      nonce,
 		WrappedKey: wrapped,
+		KeyID:      mk.ID(),
 	}
 	return kf, mk, nil
 }
