@@ -3,6 +3,9 @@
 Tags on this repository. Signature changes are called out; on-disk formats
 never change incompatibly.
 
+## v0.2.6 (unreleased)
+- `crypto.WrapSecretAsymmetric` / `crypto.UnwrapSecretAsymmetric`: X25519 ECIES for a secret of any length (HKDF info `disknexus-secret-wrap-v1`, a domain distinct from master-key wrapping); the layout a browser reproduces with WebCrypto. `crypto.SecretWrapOverhead`.
+
 ## v0.2.5
 - deps: `github.com/ulikunitz/xz` v0.5.15 (indirect, via go-diskfs).
 
