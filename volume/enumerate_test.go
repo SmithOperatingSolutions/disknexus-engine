@@ -220,6 +220,12 @@ func TestDiskutilComposition(t *testing.T) {
 	if sys, err := e.systemDiskFromDiskutil([]byte(rootInfo)); err != nil || sys != "/dev/disk0" {
 		t.Fatalf("root with its own physical store = %q, %v (want /dev/disk0, not the container disk9)", sys, err)
 	}
+	// diskutil info spells the store as APFSPhysicalStore (list says
+	// DeviceIdentifier): the shape a real `diskutil info -plist /` has.
+	infoShaped := `<plist version="1.0"><dict><key>ParentWholeDisk</key><string>disk1</string><key>APFSPhysicalStores</key><array><dict><key>APFSPhysicalStore</key><string>disk0s2</string></dict></array></dict></plist>`
+	if sys, err := e.systemDiskFromDiskutil([]byte(infoShaped)); err != nil || sys != "/dev/disk0" {
+		t.Fatalf("info-shaped physical store = %q, %v (want /dev/disk0, not the container disk1)", sys, err)
+	}
 	if sys, err := e.systemDiskFromDiskutil([]byte(diskutilInfo("disk4s1"))); err != nil || sys != "/dev/disk4" {
 		t.Fatalf("plain root: %q %v", sys, err)
 	}

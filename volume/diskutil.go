@@ -119,25 +119,35 @@ func (e Enumerator) systemDiskFromDiskutil(rootInfo []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if stores := d.dicts("APFSPhysicalStores"); len(stores) > 0 {
-		if id := macWholeDisk(stores[0].str("DeviceIdentifier")); id != "" {
-			return "/dev/" + id, nil
-		}
+	if id := physicalStoreDisk(d); id != "" {
+		return "/dev/" + id, nil
 	}
 	if parent := d.str("ParentWholeDisk"); parent != "" {
 		// The container itself is synthesized: ask it for its store.
 		if info, err := e.diskutil("info", "-plist", parent); err == nil {
 			if pd, perr := parsePlist(info); perr == nil {
-				if stores := pd.dicts("APFSPhysicalStores"); len(stores) > 0 {
-					if id := macWholeDisk(stores[0].str("DeviceIdentifier")); id != "" {
-						return "/dev/" + id, nil
-					}
+				if id := physicalStoreDisk(pd); id != "" {
+					return "/dev/" + id, nil
 				}
 			}
 		}
 		return "/dev/" + parent, nil
 	}
 	return "", errNoRootDisk
+}
+
+// physicalStoreDisk is the whole disk behind an APFS container's first
+// physical store. `diskutil list` names the store's node as
+// DeviceIdentifier; `diskutil info` names it as APFSPhysicalStore.
+func physicalStoreDisk(d plistDict) string {
+	for _, st := range d.dicts("APFSPhysicalStores") {
+		for _, key := range []string{"DeviceIdentifier", "APFSPhysicalStore"} {
+			if id := macWholeDisk(st.str(key)); id != "" {
+				return id
+			}
+		}
+	}
+	return ""
 }
 
 // macWholeDisk maps a macOS node to its whole disk: disk0s2 → disk0,
