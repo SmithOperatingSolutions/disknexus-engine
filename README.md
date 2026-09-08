@@ -32,6 +32,7 @@ no account — and the suite that demonstrates that ships here.
 | `bmr` | Bare-metal restore: putting a disk back onto hardware, same-size or into a fit plan (`RestoreDiskFit`, with shrunk members staged by the caller); `CloneDisk` drive-to-drive with per-partition read-back; `CheckBootStructures`, what a boot needs on the written target |
 | `diskplan`, `restoreplan` | Planning a multi-partition capture; planning how a restore fetches its packs |
 | `exportimport` | Exporting a backup set as a portable archive, and importing one |
+| `diskimage` | Writing a restore as a disk image: sparse raw, VHD (dynamic or fixed), qcow2 and VMDK, with readers written from the specifications so an export can be verified byte for byte |
 
 ## The proof
 

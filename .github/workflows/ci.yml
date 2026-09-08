@@ -54,6 +54,12 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # diskimage: qemu-img is the external authority for the image writers
+      # (info, check, convert on every format); its test skips only when the
+      # binary is absent.
+      - name: Install qemu-img
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq qemu-utils
       - run: go test ./...
 
   race:
