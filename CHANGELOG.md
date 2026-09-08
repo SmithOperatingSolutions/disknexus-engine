@@ -3,7 +3,7 @@
 Tags on this repository. Signature changes are called out; on-disk formats
 never change incompatibly.
 
-## v0.2.9 (unreleased)
+## v0.2.9
 - `volume.Enumerator.SystemDisk` on macOS reads the physical store `diskutil info` spells as `APFSPhysicalStore` (v0.2.8 read only the `diskutil list` spelling and reported no system disk on a real Mac).
 
 ## v0.2.8
