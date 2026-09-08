@@ -3,7 +3,10 @@
 Tags on this repository. Signature changes are called out; on-disk formats
 never change incompatibly.
 
-## v0.2.6 (unreleased)
+## v0.2.7 (unreleased)
+- `diskimage`: writers for sparse raw, VHD (dynamic or fixed), qcow2 v3 and VMDK monolithicFlat behind one restore-shaped `Writer` (`WriteAt`/`ReadAt`/`Truncate`/`Sync`/`Close`/`Files`), zero runs elided in every format; `Open` reads a finished image back through a reader written from the format's specification. The VHD creator field is qemu's footer-size marker.
+
+## v0.2.6
 - `crypto.WrapSecretAsymmetric` / `crypto.UnwrapSecretAsymmetric`: X25519 ECIES for a secret of any length (HKDF info `disknexus-secret-wrap-v1`, a domain distinct from master-key wrapping); the layout a browser reproduces with WebCrypto. `crypto.SecretWrapOverhead`.
 - `crypto.KeyFile.KeyID` (`key_id`, optional; absent in earlier files, readers treat absence as unknown): a domain-separated hash naming the master key without carrying it. `(*MasterKey).ID()`, `crypto.RewrapKeyFile(mk, passphrase)` (the rotation primitive: same key, fresh salt and nonce), `(*KeyFile).SameKey(other)`.
 
