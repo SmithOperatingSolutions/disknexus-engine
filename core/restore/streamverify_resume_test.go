@@ -21,11 +21,19 @@ import (
 // a stream digest — what a server-side digest verify (#465) walks.
 func streamWorld(t *testing.T, n int) (*manifest.Backup, *index.DedupIndex, *store.ChunkStore) {
 	t.Helper()
+	return streamWorldPacked(t, n, 1<<20)
+}
+
+// streamWorldPacked is streamWorld with a pack size: a small one seals
+// early packs, so a test can remove or corrupt one that no writer holds
+// open (Windows refuses to remove a file with an open handle).
+func streamWorldPacked(t *testing.T, n int, packMax int64) (*manifest.Backup, *index.DedupIndex, *store.ChunkStore) {
+	t.Helper()
 	repo := t.TempDir()
 	if err := store.InitRepo(repo, store.RepoConfig{}); err != nil {
 		t.Fatal(err)
 	}
-	cs, err := store.NewChunkStore(repo, 1<<20, 1)
+	cs, err := store.NewChunkStore(repo, packMax, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"encoding"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"hash"
 	"time"
@@ -178,7 +179,11 @@ func (sv *StreamVerify) Range(ctx context.Context, entries manifest.EntryAccesso
 				sv.result.ExcludedChunks++
 				sv.fold.zeros(entry.ChunkLength)
 			default:
-				if data, verr := verifyEntry(i, entry, idx, st, norm); verr != nil {
+				data, verr, ferr := verifyEntry(i, entry, idx, st, norm)
+				if ferr != nil {
+					return ferr // nothing judged: the walk stops here, checkpoint intact
+				}
+				if verr != nil {
 					sv.result.Errors = append(sv.result.Errors, *verr)
 					sv.fold.abort()
 				} else {
@@ -320,7 +325,10 @@ func VerifySelectedWithNormalizer(ctx context.Context, backup *manifest.Backup, 
 			fold.zeros(entry.ChunkLength)
 			continue
 		}
-		data, verr := verifyEntry(i, entry, idx, st, norm)
+		data, verr, ferr := verifyEntry(i, entry, idx, st, norm)
+		if ferr != nil {
+			return nil, ferr // nothing judged: not a verdict
+		}
 		if verr != nil {
 			result.Errors = append(result.Errors, *verr)
 			fold.abort() // an unverified chunk means the fold is not the stream
@@ -410,26 +418,36 @@ func (f *digestFold) finish(res *VerifyResult) {
 // verifyEntry also returns the retrieved (stored-original) bytes on
 // success, so the caller's stream fold reads what a restore would write
 // without a second retrieval.
-func verifyEntry(i int, entry manifest.Entry, idx *index.DedupIndex, st *store.ChunkStore, norm preprocess.Normalizer) ([]byte, *VerifyError) {
+// verifyEntry reads and hashes one entry. A chunk that is wrong (missing
+// from the index, unreadable, a hash or size mismatch) is a *VerifyError —
+// a verdict about the backup. A pack that could not be FETCHED
+// (store.FetchError: the download hook failed) is returned as the plain
+// error instead: nothing was judged, and the walk must stop and say so
+// rather than file a chunk error and abort its digest fold.
+func verifyEntry(i int, entry manifest.Entry, idx *index.DedupIndex, st *store.ChunkStore, norm preprocess.Normalizer) ([]byte, *VerifyError, error) {
 	idxEntry, found, err := idx.LookupDirect(entry.ChunkHash)
 	if err != nil {
-		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("index lookup error: %v", err)}
+		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("index lookup error: %v", err)}, nil
 	}
 	if !found {
-		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("chunk not found in index (hash %x)", entry.ChunkHash[:8])}
+		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("chunk not found in index (hash %x)", entry.ChunkHash[:8])}, nil
 	}
 
 	data, err := st.Retrieve(idxEntry.PackNumber, int64(idxEntry.StoreOffset))
 	if err != nil {
-		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("retrieval error: %v", err)}
+		var fe *store.FetchError
+		if errors.As(err, &fe) {
+			return nil, nil, fmt.Errorf("chunk %d (offset %d): %w", i, entry.VolumeOffset, err)
+		}
+		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("retrieval error: %v", err)}, nil
 	}
 
 	actualHash := sha256.Sum256(preprocess.IdentityHashInput(norm, data))
 	if actualHash != entry.ChunkHash {
-		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("SHA-256 mismatch: expected %x, got %x", entry.ChunkHash[:8], actualHash[:8])}
+		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("SHA-256 mismatch: expected %x, got %x", entry.ChunkHash[:8], actualHash[:8])}, nil
 	}
 	if len(data) != entry.ChunkLength {
-		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("size mismatch: expected %d, got %d", entry.ChunkLength, len(data))}
+		return nil, &VerifyError{ChunkIndex: i, Offset: entry.VolumeOffset, Message: fmt.Sprintf("size mismatch: expected %d, got %d", entry.ChunkLength, len(data))}, nil
 	}
-	return data, nil
+	return data, nil, nil
 }
