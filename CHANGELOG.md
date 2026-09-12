@@ -3,6 +3,9 @@
 Tags on this repository. Signature changes are called out; on-disk formats
 never change incompatibly.
 
+## v0.2.11
+- `store.ErrPackAbsent`: a download hook wraps it when the repository no longer HAS the pack (a 404, not a timeout). The store then returns a plain error, as before v0.2.10, so a verify files the loss per chunk and keeps walking; only an error the hook cannot classify becomes `store.FetchError` and stops the walk. v0.2.10 alone turned a deleted pack into a fetch failure and hid which chunks were gone.
+
 ## v0.2.10
 - `store.FetchError`: a pack (or ranged chunk) the store could not FETCH — the download hook failed — as distinct from one it read and found wrong. `restore.StreamVerify.Range` and `restore.VerifySelected` now return it instead of recording a chunk error and aborting the digest fold, so a verify whose network died mid-walk is a failed run with its checkpoint intact, not a corruption verdict (product #633). Signature: none exported changes; the unexported `verifyEntry` gains an error return.
 

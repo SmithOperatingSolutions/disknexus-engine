@@ -3,6 +3,7 @@ package restore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"testing"
 
@@ -85,5 +86,28 @@ func TestASampledVerifyReturnsAFetchFailureAsAnError(t *testing.T) {
 	}
 	if !errors.Is(err, errNet) {
 		t.Fatalf("the sampled verify's error does not carry the fetch failure: %v", err)
+	}
+}
+
+// A pack the repository no longer HAS is loss, not a transport failure:
+// the download hook says so with store.ErrPackAbsent, and the walk files a
+// chunk error per entry and keeps going, so intact packs still verify and
+// the operator sees exactly which chunks are gone. Only a failure the hook
+// cannot classify (network, cancellation, budget) stops the walk.
+func TestAnAbsentPackIsLossNotAFetchFailure(t *testing.T) {
+	b, idx, cs := streamWorldPacked(t, 40, 8192)
+	if err := os.Remove(cs.PackPath(0)); err != nil {
+		t.Fatal(err)
+	}
+	cs.OnPackMissing = func(uint32) error { return fmt.Errorf("S3 GET returned 404: %w", store.ErrPackAbsent) }
+	ea := manifest.NewSliceEntryAccessor(b.Entries)
+	total := int64(len(b.Entries))
+	sv, _ := NewStreamVerify(b, total)
+	if err := sv.Range(context.Background(), ea, 0, total, idx, cs, nil, nil); err != nil {
+		t.Fatalf("a pack the repository lost stopped the walk with %v — the operator never learns which chunks are gone and the other packs go unverified", err)
+	}
+	res := sv.Finish()
+	if len(res.Errors) == 0 || res.VerifiedChunks == 0 {
+		t.Fatalf("an absent pack: %d chunk errors, %d verified — want per-chunk loss with the rest verified", len(res.Errors), res.VerifiedChunks)
 	}
 }
