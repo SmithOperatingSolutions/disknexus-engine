@@ -3,6 +3,9 @@
 Tags on this repository. Signature changes are called out; on-disk formats
 never change incompatibly.
 
+## v0.2.10
+- `store.FetchError`: a pack (or ranged chunk) the store could not FETCH — the download hook failed — as distinct from one it read and found wrong. `restore.StreamVerify.Range` and `restore.VerifySelected` now return it instead of recording a chunk error and aborting the digest fold, so a verify whose network died mid-walk is a failed run with its checkpoint intact, not a corruption verdict (product #633). Signature: none exported changes; the unexported `verifyEntry` gains an error return.
+
 ## v0.2.9
 - `volume.Enumerator.SystemDisk` on macOS reads the physical store `diskutil info` spells as `APFSPhysicalStore` (v0.2.8 read only the `diskutil list` spelling and reported no system disk on a real Mac).
 

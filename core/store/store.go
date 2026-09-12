@@ -279,7 +279,7 @@ func (cs *ChunkStore) Retrieve(packNum uint32, offset int64) ([]byte, error) {
 			return nil, false, nil // planner says: this pack is dense, download it
 		}
 		if err != nil {
-			return nil, true, fmt.Errorf("fetching chunk (pack %d offset %d): %w", packNum, offset, err)
+			return nil, true, &FetchError{Pack: packNum, Err: fmt.Errorf("chunk at offset %d: %w", offset, err)}
 		}
 		cs.CacheFrame(packNum, offset, frame)
 		data, err := cs.RetrieveFromFrame(frame)
@@ -605,9 +605,21 @@ func (cs *ChunkStore) openPackForRead(packNum uint32) (*os.File, error) {
 }
 
 // fetchAndOpenPack calls OnPackMissing and then re-opens the pack file.
+// FetchError is a pack or chunk the store could not FETCH — the download
+// hook failed (network, cancellation, budget) — as opposed to one it read
+// and found wrong. A verify that meets one cannot judge the chunk: it must
+// stop and say so, not record a chunk error and abort its digest fold.
+type FetchError struct {
+	Pack uint32
+	Err  error
+}
+
+func (e *FetchError) Error() string { return fmt.Sprintf("fetching pack %d: %v", e.Pack, e.Err) }
+func (e *FetchError) Unwrap() error { return e.Err }
+
 func (cs *ChunkStore) fetchAndOpenPack(packNum uint32) (*os.File, error) {
 	if err := cs.OnPackMissing(packNum); err != nil {
-		return nil, fmt.Errorf("OnPackMissing pack %d: %w", packNum, err)
+		return nil, &FetchError{Pack: packNum, Err: err}
 	}
 	f, err := os.Open(cs.packPath(packNum))
 	if err != nil {
