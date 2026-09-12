@@ -279,6 +279,9 @@ func (cs *ChunkStore) Retrieve(packNum uint32, offset int64) ([]byte, error) {
 			return nil, false, nil // planner says: this pack is dense, download it
 		}
 		if err != nil {
+			if errors.Is(err, ErrPackAbsent) {
+				return nil, true, fmt.Errorf("fetching chunk (pack %d offset %d): %w", packNum, offset, err)
+			}
 			return nil, true, &FetchError{Pack: packNum, Err: fmt.Errorf("chunk at offset %d: %w", offset, err)}
 		}
 		cs.CacheFrame(packNum, offset, frame)
@@ -614,11 +617,20 @@ type FetchError struct {
 	Err  error
 }
 
+// ErrPackAbsent is what a download hook wraps when the repository no longer
+// HAS the pack (the object is gone: a 404, not a timeout). That is loss,
+// not a fetch failure: a verify files it per chunk and keeps walking, so
+// the operator sees exactly which chunks are gone.
+var ErrPackAbsent = errors.New("pack absent from the repository")
+
 func (e *FetchError) Error() string { return fmt.Sprintf("fetching pack %d: %v", e.Pack, e.Err) }
 func (e *FetchError) Unwrap() error { return e.Err }
 
 func (cs *ChunkStore) fetchAndOpenPack(packNum uint32) (*os.File, error) {
 	if err := cs.OnPackMissing(packNum); err != nil {
+		if errors.Is(err, ErrPackAbsent) {
+			return nil, fmt.Errorf("OnPackMissing pack %d: %w", packNum, err) // loss: judged per chunk
+		}
 		return nil, &FetchError{Pack: packNum, Err: err}
 	}
 	f, err := os.Open(cs.packPath(packNum))
